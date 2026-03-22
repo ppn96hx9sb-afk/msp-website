@@ -128,22 +128,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!widget || !messagesEl || !statusEl || !formEl || !inputEl || !sendBtn) return;
 
-    // 在 index.html 里、本脚本之前设置：window.CHAT_API_BASE = 'https://你的-ngrok-域名'
-    // （Flask 根 URL，无末尾斜杠；会请求 …/api/chat）。GitHub Pages 等纯静态站没有后端，切勿依赖同源。
-    const explicitBase =
-        typeof window.CHAT_API_BASE === 'string' ? window.CHAT_API_BASE.trim().replace(/\/$/, '') : '';
+    // 可在 index.html 里先于本脚本设置：window.CHAT_API_BASE = 'https://xxx.ngrok-free.dev'（根地址，无末尾 /）
+    // 本地与网站同源托管（如 Flask 同时提供页面）时可用默认同源；GitHub Pages 只有静态文件，用 origin 会 POST 到 pages 域名 → 405。
     const host = (location.hostname || '').toLowerCase();
-    const looksLikeStaticPagesHost =
-        host === 'github.io' || host.endsWith('.github.io') || host.endsWith('.gitlab.io');
-    let apiBase = explicitBase;
-    if (!apiBase && location.protocol !== 'file:' && location.origin && !looksLikeStaticPagesHost) {
-        apiBase = location.origin.replace(/\/$/, '');
-    }
+    const isGitHubPagesHost =
+        host === 'github.io' || host.endsWith('.github.io');
+    const apiBase =
+        (typeof window.CHAT_API_BASE === 'string' && window.CHAT_API_BASE.trim()) ||
+        (!isGitHubPagesHost &&
+        location.protocol !== 'file:' &&
+        location.origin
+            ? location.origin
+            : '');
     const CHAT_API_URL = apiBase
-        ? `${apiBase}/api/chat`
-        : location.protocol === 'file:'
-            ? 'https://sana-uncalmative-cristine.ngrok-free.dev/api/chat'
-            : '';
+        ? `${apiBase.replace(/\/$/, '')}/api/chat`
+        : 'https://sana-uncalmative-cristine.ngrok-free.dev/api/chat';
 
     const escapeText = (s) => String(s).replace(/\r/g, '').replace(/\n/g, '\n');
 
@@ -212,7 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 'Content-Type': 'application/json'
             };
             // ngrok 免费域名在浏览器里请求 API 时建议带上，避免拦截页导致非 JSON / 连接异常
-            if (/ngrok-free\.(dev|app)|ngrok\.io|ngrok\.app/i.test(CHAT_API_URL)) {
+            if (/ngrok-free\.dev|ngrok\.io/i.test(CHAT_API_URL)) {
                 headers['ngrok-skip-browser-warning'] = 'true';
             }
 
