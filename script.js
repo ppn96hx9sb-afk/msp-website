@@ -128,14 +128,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!widget || !messagesEl || !statusEl || !formEl || !inputEl || !sendBtn) return;
 
-    // 可在 index.html 里先写：<script>window.CHAT_API_BASE='https://你的域名';</script>
-    // 未设置时默认同源 /api/chat（网站与 Flask 同域时）；否则填 ngrok 等完整 base（无末尾斜杠）。
-    const apiBase =
-        (typeof window.CHAT_API_BASE === 'string' && window.CHAT_API_BASE.trim()) ||
-        (location.protocol !== 'file:' && location.origin ? location.origin : '');
+    // 在 index.html 里、本脚本之前设置：window.CHAT_API_BASE = 'https://你的-ngrok-域名'
+    // （Flask 根 URL，无末尾斜杠；会请求 …/api/chat）。GitHub Pages 等纯静态站没有后端，切勿依赖同源。
+    const explicitBase =
+        typeof window.CHAT_API_BASE === 'string' ? window.CHAT_API_BASE.trim().replace(/\/$/, '') : '';
+    const host = (location.hostname || '').toLowerCase();
+    const looksLikeStaticPagesHost =
+        host === 'github.io' || host.endsWith('.github.io') || host.endsWith('.gitlab.io');
+    let apiBase = explicitBase;
+    if (!apiBase && location.protocol !== 'file:' && location.origin && !looksLikeStaticPagesHost) {
+        apiBase = location.origin.replace(/\/$/, '');
+    }
     const CHAT_API_URL = apiBase
-        ? `${apiBase.replace(/\/$/, '')}/api/chat`
-        : 'https://sana-uncalmative-cristine.ngrok-free.dev/api/chat';
+        ? `${apiBase}/api/chat`
+        : location.protocol === 'file:'
+            ? 'https://sana-uncalmative-cristine.ngrok-free.dev/api/chat'
+            : '';
 
     const escapeText = (s) => String(s).replace(/\r/g, '').replace(/\n/g, '\n');
 
@@ -204,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 'Content-Type': 'application/json'
             };
             // ngrok 免费域名在浏览器里请求 API 时建议带上，避免拦截页导致非 JSON / 连接异常
-            if (/ngrok-free\.dev|ngrok\.io/i.test(CHAT_API_URL)) {
+            if (/ngrok-free\.(dev|app)|ngrok\.io|ngrok\.app/i.test(CHAT_API_URL)) {
                 headers['ngrok-skip-browser-warning'] = 'true';
             }
 
