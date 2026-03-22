@@ -1,8 +1,10 @@
 import json
+import logging
 import math
 import os
 import re
 import time
+from logging.handlers import RotatingFileHandler
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -35,6 +37,22 @@ MAX_FULL_MANUAL_CHARS = int(os.getenv("MAX_FULL_MANUAL_CHARS", "48000"))
 RAG_TOP_K = int(os.getenv("RAG_TOP_K", "4"))
 MAX_MATERIAL_CHARS = int(os.getenv("MAX_MATERIAL_CHARS", "6000"))
 
+# 多轮对话：传给 Ollama 的最大条数（user/assistant 各算一条），防止上下文过长
+MAX_CHAT_HISTORY_MESSAGES = int(os.getenv("MAX_CHAT_HISTORY_MESSAGES", "40"))
+
+# 对话请求日志（含客户端 IP）；CHAT_LOG_ENABLED=0 可关闭
+CHAT_LOG_ENABLED = os.getenv("CHAT_LOG_ENABLED", "1").strip().lower() not in (
+    "0",
+    "false",
+    "no",
+    "",
+)
+CHAT_LOG_PATH = os.getenv("CHAT_LOG_PATH", os.path.join(BASE_DIR, "website_chat.log"))
+CHAT_LOG_MAX_BYTES = int(os.getenv("CHAT_LOG_MAX_BYTES", str(10 * 1024 * 1024)))
+CHAT_LOG_BACKUP_COUNT = int(os.getenv("CHAT_LOG_BACKUP_COUNT", "5"))
+# 写入日志时单条 content 最大字符数，避免历史过长撑爆文件
+CHAT_LOG_MAX_CONTENT_PER_MSG = int(os.getenv("CHAT_LOG_MAX_CONTENT_PER_MSG", "4000"))
+
 # Chunking settings (text-only for retrieval)
 CHUNK_MIN_CHARS = int(os.getenv("CHUNK_MIN_CHARS", "200"))
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "2200"))
@@ -43,6 +61,72 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
 
 app = Flask(__name__)
 CORS(app)
+
+_chat_logger = logging.getLogger("msp_website_chat")
+_chat_logger.setLevel(logging.INFO)
+_chat_logger.propagate = False
+if CHAT_LOG_ENABLED:
+    _chat_handler = RotatingFileHandler(
+        CHAT_LOG_PATH,
+        maxBytes=max(CHAT_LOG_MAX_BYTES, 1024 * 1024),
+        backupCount=max(CHAT_LOG_BACKUP_COUNT, 1),
+        encoding="utf-8",
+    )
+    _chat_handler.setFormatter(
+        logging.Formatter("%(asctime)s\t%(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    )
+    _chat_logger.addHandler(_chat_handler)
+
+
+def _client_ip() -> str:
+    """优先使用反向代理转发的真实客户端 IP。"""
+    xff = (request.headers.get("X-Forwarded-For") or "").strip()
+    if xff:
+        return xff.split(",")[0].strip()
+    xri = (request.headers.get("X-Real-IP") or "").strip()
+    if xri:
+        return xri
+    return (request.remote_addr or "").strip() or "unknown"
+
+
+def _truncate_for_log(text: str, max_len: int) -> str:
+    if max_len <= 0:
+        return ""
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 3] + "..."
+
+
+def log_chat_request(question: str, history: Any, extra: Optional[Dict[str, Any]] = None) -> None:
+    """将本轮用户问题、history 摘要与客户端 IP 写入日志文件（一行 JSON）。"""
+    if not CHAT_LOG_ENABLED:
+        return
+    hist_summary: List[Dict[str, str]] = []
+    if isinstance(history, list):
+        for m in history:
+            if not isinstance(m, dict):
+                continue
+            role = str(m.get("role", "")).strip()
+            content = _truncate_for_log(
+                str(m.get("content", "")), CHAT_LOG_MAX_CONTENT_PER_MSG
+            )
+            if not role:
+                continue
+            hist_summary.append({"role": role, "content": content})
+
+    rec: Dict[str, Any] = {
+        "ip": _client_ip(),
+        "question": _truncate_for_log(question, CHAT_LOG_MAX_CONTENT_PER_MSG),
+        "history": hist_summary,
+    }
+    if extra:
+        rec.update(extra)
+    try:
+        _chat_logger.info(json.dumps(rec, ensure_ascii=False))
+    except Exception:
+        # 日志失败不影响接口
+        pass
 
 
 def _post_json(url: str, payload: Dict[str, Any], timeout_s: int = 600) -> Dict[str, Any]:
@@ -304,6 +388,8 @@ def api_chat():
     if not question:
         return jsonify({"answer": "", "sources": []}), 400
 
+    log_chat_request(question, payload.get("history"))
+
     try:
         if CHAT_MODE == "full":
             materials, sources = get_full_manual_for_prompt()
@@ -385,12 +471,38 @@ def api_chat():
             "请用简体中文作答。"
         )
 
+        # 多轮：前端会传 history（含本轮用户句）；RAG 仍只针对当前 question 检索
+        hist_raw = payload.get("history")
+        if not isinstance(hist_raw, list):
+            hist_raw = []
+        if MAX_CHAT_HISTORY_MESSAGES > 0 and len(hist_raw) > MAX_CHAT_HISTORY_MESSAGES:
+            hist_raw = hist_raw[-MAX_CHAT_HISTORY_MESSAGES:]
+
+        ollama_messages: List[Dict[str, str]] = [{"role": "system", "content": system_prompt}]
+        augmented_last_user = False
+        if not hist_raw:
+            ollama_messages.append({"role": "user", "content": user_prompt})
+            augmented_last_user = True
+        else:
+            n = len(hist_raw)
+            for idx, msg in enumerate(hist_raw):
+                if not isinstance(msg, dict):
+                    continue
+                role = str(msg.get("role", "")).strip().lower()
+                content = str(msg.get("content", "")).strip()
+                if role not in ("user", "assistant") or not content:
+                    continue
+                if idx == n - 1 and role == "user":
+                    ollama_messages.append({"role": "user", "content": user_prompt})
+                    augmented_last_user = True
+                else:
+                    ollama_messages.append({"role": role, "content": content})
+            if not augmented_last_user:
+                ollama_messages.append({"role": "user", "content": user_prompt})
+
         chat_payload = {
             "model": OLLAMA_LLM_MODEL,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
+            "messages": ollama_messages,
             "stream": False,
             "options": {"temperature": 0.2},
         }
