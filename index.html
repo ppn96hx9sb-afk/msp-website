@@ -339,6 +339,41 @@
         </div>
     </footer>
 
+    <!-- 右侧 AI 客服（固定定位，滚动页面不改变位置） -->
+    <aside class="chat-widget" id="chat-widget" aria-label="AI 客服">
+        <div class="chat-header">
+            <div class="chat-title">
+                <span class="chat-badge">AI</span>
+                <span>AI 客服</span>
+            </div>
+            <button
+                class="chat-minimize"
+                type="button"
+                aria-label="缩小"
+                aria-expanded="true"
+            >−</button>
+        </div>
+        <div class="chat-body">
+            <div class="chat-notice" role="note">
+                <p><strong>后端运行时间</strong>：周一至周日 9:00–24:00</p>
+                <p><strong>如有问题请联系</strong>：<a href="tel:+8613072856606">86&nbsp;13072856606</a></p>
+            </div>
+            <div class="chat-messages" id="chat-messages" role="log" aria-live="polite"></div>
+            <div class="chat-status" id="chat-status" aria-live="polite"></div>
+        </div>
+        <form class="chat-input" id="chat-form">
+            <input
+                class="chat-text"
+                id="chat-input"
+                type="text"
+                placeholder="如：如何安装？"
+                autocomplete="off"
+                required
+            />
+            <button class="chat-send" id="chat-send" type="submit">发送</button>
+        </form>
+    </aside>
+
     <script src="script.js"></script>
 </body>
 </html>

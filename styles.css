@@ -801,3 +801,220 @@ code {
         text-align: center;
     }
 }
+
+/* 右侧 AI 客服（固定定位） */
+.chat-widget {
+    position: fixed;
+    right: 20px;
+    top: 140px;
+    bottom: 20px;
+    width: 360px;
+    max-width: calc(100vw - 40px);
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+    z-index: 2000;
+}
+
+.chat-header {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+    color: #ffffff;
+    padding: 12px 14px;
+    border-radius: 14px 14px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.chat-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+}
+
+.chat-badge {
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+}
+
+.chat-minimize {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-size: 22px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 6px;
+}
+
+/* 缩小后仅保留标题栏，可再次点击「展开」恢复 */
+.chat-widget.chat-minimized {
+    top: auto;
+    bottom: 20px;
+    height: auto;
+}
+
+.chat-widget.chat-minimized .chat-header {
+    border-radius: 14px;
+}
+
+.chat-widget.chat-minimized .chat-body,
+.chat-widget.chat-minimized .chat-input {
+    display: none;
+}
+
+.chat-body {
+    padding: 10px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    gap: 8px;
+}
+
+.chat-notice {
+    flex-shrink: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-light);
+    background: var(--bg-light);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 8px 10px;
+}
+
+.chat-notice p {
+    margin: 0;
+}
+
+.chat-notice p + p {
+    margin-top: 6px;
+}
+
+.chat-notice a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.chat-notice a:hover {
+    text-decoration: underline;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow: auto;
+    padding-right: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.chat-message {
+    max-width: 95%;
+}
+
+.chat-message.user {
+    align-self: flex-end;
+}
+
+.chat-message.assistant {
+    align-self: flex-start;
+}
+
+.chat-bubble {
+    padding: 10px 12px;
+    border-radius: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.chat-message.user .chat-bubble {
+    background: var(--primary-color);
+    color: #ffffff;
+    border-bottom-right-radius: 4px;
+}
+
+.chat-message.assistant .chat-bubble {
+    background: var(--bg-light);
+    color: var(--text-color);
+    border-bottom-left-radius: 4px;
+}
+
+.chat-status {
+    font-size: 12px;
+    color: var(--text-light);
+    min-height: 16px;
+}
+
+.chat-input {
+    display: flex;
+    gap: 10px;
+    padding: 12px 10px;
+    border-top: 1px solid var(--border-color);
+}
+
+.chat-text {
+    flex: 1;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 10px 12px;
+    outline: none;
+    font-size: 14px;
+}
+
+.chat-send {
+    background: var(--primary-color);
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.chat-send:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+    .chat-widget {
+        right: 10px;
+        left: 10px;
+        top: auto;
+        bottom: 0;
+        width: auto;
+        height: 45vh;
+    }
+
+    .chat-widget.chat-minimized {
+        height: auto;
+    }
+}
+
+/* 兼容：如果前面写成了 ::root（无效），这里再定义一次变量，确保聊天框配色可用 */
+:root {
+    --primary-color: #3e4c70;
+    --primary-dark: #263052;
+    --secondary-color: #2c333d;
+    --text-color: #0f172a;
+    --text-light: #475569;
+    --bg-color: #fafafa;
+    --bg-light: #f1f5f9;
+    --bg-dark: #1c275a;
+    --border-color: #cbd5e1;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.15), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.15), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+}
