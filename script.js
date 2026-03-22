@@ -128,9 +128,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!widget || !messagesEl || !statusEl || !formEl || !inputEl || !sendBtn) return;
 
-    // 静态托管（GitHub Pages 等）与客服 API 常在另一台机器：用下面「远程默认」或 meta / CHAT_API_BASE 指向 ngrok 等公网入口（根 URL，无末尾 /）
+    // 静态托管（GitHub Pages 等）与客服 API 常在另一台机器：用「远程默认」或 meta / CHAT_API_BASE 指向 ngrok 等（根 URL，无末尾 /）
     const DEFAULT_REMOTE_CHAT_API_BASE =
         'https://sana-uncalmative-cristine.ngrok-free.dev';
+
+    const safePageOrigin = () => {
+        const o = location.origin;
+        if (typeof o !== 'string' || !o || o === 'null') return '';
+        return /^https?:\/\/[^/]+/i.test(o) ? o : '';
+    };
 
     const metaChatBase = (() => {
         const el = document.querySelector('meta[name="msp-chat-api-base"]');
@@ -160,28 +166,21 @@ document.addEventListener('DOMContentLoaded', () => {
     let apiBase = explicitBase;
     if (!apiBase) {
         if (isLocalDevHost && location.protocol !== 'file:') {
-            apiBase = location.origin || '';
+            apiBase = safePageOrigin();
         } else if (isGitHubPagesHost || location.protocol === 'file:') {
             apiBase = DEFAULT_REMOTE_CHAT_API_BASE;
         } else {
-            apiBase = location.origin || '';
+            apiBase = safePageOrigin();
         }
     }
 
-    const baseNoSlash = String(apiBase).replace(/\/$/, '');
+    const stripSlash = (s) => String(s == null ? '' : s).trim().replace(/\/+$/, '');
+    let baseNoSlash = stripSlash(apiBase);
+    // 部分 WebView / 异常 origin 会得到不可解析的 base，统一回退到默认远程，避免误判「无效地址」而不发请求
+    if (!baseNoSlash || !/^https?:\/\//i.test(baseNoSlash)) {
+        baseNoSlash = stripSlash(DEFAULT_REMOTE_CHAT_API_BASE);
+    }
     const CHAT_API_URL = `${baseNoSlash}/api/chat`;
-
-    const isChatApiUrlValid = (url) => {
-        try {
-            const u = new URL(url);
-            return (
-                (u.protocol === 'https:' || u.protocol === 'http:') &&
-                Boolean(u.hostname)
-            );
-        } catch {
-            return false;
-        }
-    };
 
     const escapeText = (s) => String(s).replace(/\r/g, '').replace(/\n/g, '\n');
 
@@ -209,8 +208,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     };
 
-    const isChatApiConfigured = () => isChatApiUrlValid(CHAT_API_URL);
-
     // 初始欢迎语
     addMessage(
         'assistant',
@@ -227,14 +224,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const sendChat = async (question) => {
-        if (!isChatApiConfigured()) {
-            addMessage(
-                'assistant',
-                '客服接口地址无效。网页是静态托管、大模型在另一台电脑时，请在 index.html 的 <head> 里添加 <meta name="msp-chat-api-base" content="https://那台机器上的-ngrok或API根地址">，或在加载本脚本前设置 window.CHAT_API_BASE（同上，无末尾斜杠）。'
-            );
-            return;
-        }
-
         inputEl.disabled = true;
         sendBtn.disabled = true;
         setStatus('请等待回复...');
