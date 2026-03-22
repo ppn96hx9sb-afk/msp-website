@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 静态站 + 客服在另一台电脑：填写运行 website_ai_service 一侧的公网根地址（如 ngrok，无末尾 /）。与 script.js 内默认一致时可省略。 -->
+    <meta name="msp-chat-api-base" content="https://sana-uncalmative-cristine.ngrok-free.dev">
     <title>微磁模拟平台 - Micro-Magnetic Simulation Platform, MSP</title>
     <link rel="icon" href="images/512.png" type="image/png">
     <link rel="stylesheet" href="styles.css">
@@ -374,9 +376,6 @@
         </form>
     </aside>
 
-    <!-- GitHub Pages 无后端：不要设置 CHAT_API_BASE 时，script.js 会识别 *.github.io 并改用内置默认 API；若 ngrok 地址变更，可在下面取消注释并填写根 URL（无末尾 /），或改 script.js 内默认地址。
-    <script>window.CHAT_API_BASE = 'https://你的隧道.ngrok-free.dev';</script>
-    -->
     <script src="script.js"></script>
 </body>
 </html>

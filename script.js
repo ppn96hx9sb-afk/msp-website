@@ -128,21 +128,60 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!widget || !messagesEl || !statusEl || !formEl || !inputEl || !sendBtn) return;
 
-    // 可在 index.html 里先于本脚本设置：window.CHAT_API_BASE = 'https://xxx.ngrok-free.dev'（根地址，无末尾 /）
-    // 本地与网站同源托管（如 Flask 同时提供页面）时可用默认同源；GitHub Pages 只有静态文件，用 origin 会 POST 到 pages 域名 → 405。
+    // 静态托管（GitHub Pages 等）与客服 API 常在另一台机器：用下面「远程默认」或 meta / CHAT_API_BASE 指向 ngrok 等公网入口（根 URL，无末尾 /）
+    const DEFAULT_REMOTE_CHAT_API_BASE =
+        'https://sana-uncalmative-cristine.ngrok-free.dev';
+
+    const metaChatBase = (() => {
+        const el = document.querySelector('meta[name="msp-chat-api-base"]');
+        if (!el) return '';
+        const c = el.getAttribute('content');
+        return typeof c === 'string' ? c.trim() : '';
+    })();
+
     const host = (location.hostname || '').toLowerCase();
     const isGitHubPagesHost =
         host === 'github.io' || host.endsWith('.github.io');
-    const apiBase =
-        (typeof window.CHAT_API_BASE === 'string' && window.CHAT_API_BASE.trim()) ||
-        (!isGitHubPagesHost &&
-        location.protocol !== 'file:' &&
-        location.origin
-            ? location.origin
-            : '');
-    const CHAT_API_URL = apiBase
-        ? `${apiBase.replace(/\/$/, '')}/api/chat`
-        : 'https://sana-uncalmative-cristine.ngrok-free.dev/api/chat';
+    const isLocalDevHost =
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host === '[::1]';
+
+    const fromWindow =
+        typeof window.CHAT_API_BASE === 'string'
+            ? window.CHAT_API_BASE.trim()
+            : '';
+    // 本机调试走同源 API；meta 仅用于非本机（如 GitHub Pages），避免同一 index 在本地也被迫打到 ngrok
+    let explicitBase = fromWindow;
+    if (!explicitBase && !isLocalDevHost && metaChatBase) {
+        explicitBase = metaChatBase;
+    }
+
+    let apiBase = explicitBase;
+    if (!apiBase) {
+        if (isLocalDevHost && location.protocol !== 'file:') {
+            apiBase = location.origin || '';
+        } else if (isGitHubPagesHost || location.protocol === 'file:') {
+            apiBase = DEFAULT_REMOTE_CHAT_API_BASE;
+        } else {
+            apiBase = location.origin || '';
+        }
+    }
+
+    const baseNoSlash = String(apiBase).replace(/\/$/, '');
+    const CHAT_API_URL = `${baseNoSlash}/api/chat`;
+
+    const isChatApiUrlValid = (url) => {
+        try {
+            const u = new URL(url);
+            return (
+                (u.protocol === 'https:' || u.protocol === 'http:') &&
+                Boolean(u.hostname)
+            );
+        } catch {
+            return false;
+        }
+    };
 
     const escapeText = (s) => String(s).replace(/\r/g, '').replace(/\n/g, '\n');
 
@@ -170,8 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     };
 
-    const isChatApiConfigured = () =>
-        Boolean(CHAT_API_URL) && !CHAT_API_URL.includes('YOUR_BACKEND_DOMAIN');
+    const isChatApiConfigured = () => isChatApiUrlValid(CHAT_API_URL);
 
     // 初始欢迎语
     addMessage(
@@ -190,7 +228,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const sendChat = async (question) => {
         if (!isChatApiConfigured()) {
-            addMessage('assistant', '无效后端地址。');
+            addMessage(
+                'assistant',
+                '客服接口地址无效。网页是静态托管、大模型在另一台电脑时，请在 index.html 的 <head> 里添加 <meta name="msp-chat-api-base" content="https://那台机器上的-ngrok或API根地址">，或在加载本脚本前设置 window.CHAT_API_BASE（同上，无末尾斜杠）。'
+            );
             return;
         }
 
